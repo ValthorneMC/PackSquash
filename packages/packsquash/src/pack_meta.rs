@@ -60,14 +60,28 @@ pub enum PackMetaError {
 }
 
 impl PackMeta {
+	/// Helper to parse a JSON number value as a Java integer (i32).
+	fn parse_format_version(value: &Value) -> Result<i32, PackMetaError> {
+		match value {
+			Value::Number(n) => {
+				let i = n.as_i64().ok_or(PackMetaError::MalformedMeta(
+					"Format version is not a Java integer"
+				))?;
+				i32::try_from(i).map_err(|_| {
+					PackMetaError::MalformedMeta("Format version is not a Java integer")
+				})
+			}
+			_ => Err(PackMetaError::MalformedMeta(
+				"Format version is not a Java integer"
+			))
+		}
+	}
+
 	/// Creates a new pack metadata struct from a virtual filesystem and its root path.
 	pub async fn new(
 		vfs: &impl VirtualFileSystem,
 		root_path: impl AsRef<Path>
 	) -> Result<Self, PackMetaError> {
-		const PACK_FORMAT_VERSION_IS_NOT_INTEGER: &str =
-			"\"pack_format\" version is not a Java integer";
-
 		let pack_format_version;
 
 		let mut file = vfs
@@ -88,30 +102,18 @@ impl PackMeta {
 					"Missing \"pack\" key in root object"
 				))? {
 					Value::Object(pack_meta_object) => {
-						match pack_meta_object.get("pack_format").ok_or(
-							PackMetaError::MalformedMeta(
-								"Missing \"pack_format\" key in pack metadata object"
-							)
-						)? {
-							Value::Number(pack_format_version_number) => {
-								// Minecraft always reads this field as a Java integer,
-								// so a conversion to an i32 should be successful
-								pack_format_version = i32::try_from(
-									pack_format_version_number.as_i64().ok_or(
-										PackMetaError::MalformedMeta(
-											PACK_FORMAT_VERSION_IS_NOT_INTEGER
-										)
-									)?
-								)
-								.map_err(|_| {
-									PackMetaError::MalformedMeta(PACK_FORMAT_VERSION_IS_NOT_INTEGER)
-								})?;
-							}
-							_ => {
-								return Err(PackMetaError::MalformedMeta(
-									PACK_FORMAT_VERSION_IS_NOT_INTEGER
-								));
-							}
+						// Try pack_format first. If absent, fall back to min_format
+						// or max_format (Minecraft 1.21.9+ format)
+						pack_format_version = if let Some(pf) = pack_meta_object.get("pack_format") {
+							Self::parse_format_version(pf)?
+						} else if let Some(min) = pack_meta_object.get("min_format") {
+							Self::parse_format_version(min)?
+						} else if let Some(max) = pack_meta_object.get("max_format") {
+							Self::parse_format_version(max)?
+						} else {
+							return Err(PackMetaError::MalformedMeta(
+								"Missing \"pack_format\", \"min_format\", or \"max_format\" key in pack metadata object"
+							));
 						};
 
 						// Also validate the pack description, because it is required by Minecraft
