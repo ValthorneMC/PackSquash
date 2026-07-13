@@ -36,7 +36,7 @@ pub enum ImageProcessingError {
 /// It also validates that neither image dimension exceeds the specified threshold.
 pub fn strip_unnecessary_chunks(
 	input_png: BytesMut,
-	maximum_dimension: NonZeroU16
+	maximum_dimension: u32
 ) -> Result<Vec<u8>, ImageProcessingError> {
 	let mut stripped_png = Vec::with_capacity(input_png.len());
 
@@ -99,7 +99,7 @@ pub fn strip_unnecessary_chunks(
 				let width = u32::from_be_bytes(chunk_data[..4].try_into().unwrap());
 				let height = u32::from_be_bytes(chunk_data[4..8].try_into().unwrap());
 
-				if width > maximum_dimension.get() as u32 || height > maximum_dimension.get() as u32 {
+				if maximum_dimension != 0 && (width > maximum_dimension || height > maximum_dimension) {
 					return Err(ImageProcessingError::StripValidateError(
 						"The texture width or height exceeds the configured maximum size. \
 						More information: <https://packsquash.aylas.org/links/Too-big-PNG-help>"

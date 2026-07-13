@@ -1371,6 +1371,10 @@ few atlased textures may get away with textures that are even bigger than
 4096x4096, but that might only happen on "beefy" GPUs, and, in general, it does
 not make much sense to mix small textures with such big textures.
 
+Setting this option to `0` disables the check entirely, accepting images of any
+size. This is useful for packs that bundle very tall animated spritesheets or
+other unusually large textures that would otherwise be rejected.
+
 It only makes sense to increase the default value if you know what you are
 doing, the affected images contain several animation frames or are texture
 atlases themselves, or use mods that somehow relax the need for GPUs to support

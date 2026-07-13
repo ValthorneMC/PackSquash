@@ -1,6 +1,6 @@
 //! Contains the configuration options needed to create a `PackSquasher` run.
 
-use std::num::{NonZeroU8, NonZeroU16, NonZeroU32};
+use std::num::{NonZeroU8, NonZeroU32};
 use std::thread::available_parallelism;
 use std::{num::NonZeroUsize, path::PathBuf};
 
@@ -952,8 +952,10 @@ pub struct PngFileOptions {
 	/// sets a high bound of memory usage by PackSquash and helps to author packs with
 	/// reasonable texture sizes.
 	///
+	/// A value of `0` disables this check, accepting images of any size.
+	///
 	/// **Default value**: 8192
-	pub maximum_width_and_height: NonZeroU16,
+	pub maximum_width_and_height: u32,
 	/// If `true`, this option prevents the color values of completely transparent pixels from being
 	/// changed in order to achieve better compression. This optimization is visually lossless,
 	/// because completely transparent pixels are invisible no matter their color, and does not
@@ -1010,7 +1012,7 @@ impl Default for PngFileOptions {
 			image_data_compression_iterations: 5,
 			color_quantization_target: Default::default(),
 			color_quantization_dithering_level: UnitIntervalFloat(0.85),
-			maximum_width_and_height: NonZeroU16::new(8192).unwrap(),
+			maximum_width_and_height: 8192,
 			skip_alpha_optimizations: false,
 			downsize_if_single_color: false,
 			png_obfuscation: false,
