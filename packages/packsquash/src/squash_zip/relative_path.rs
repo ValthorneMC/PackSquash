@@ -153,6 +153,20 @@ impl<'a> RelativePath<'a> {
 	pub(crate) fn from_inner(string: impl Into<Cow<'a, str>>) -> Self {
 		Self(string.into())
 	}
+
+	/// If this relative path has `directory` as its first path component, returns an
+	/// owned relative path with that component stripped off. Returns `None` if this
+	/// path does not begin with `directory` as a whole component (i.e., a path like
+	/// `directoryfoo/bar` does not match a `directory` of `directory`).
+	///
+	/// This is useful to reinterpret paths that live under a pack overlay directory as
+	/// if they were directly at the pack root, for classification purposes.
+	pub(crate) fn strip_overlay_prefix(&self, directory: &str) -> Option<RelativePath<'static>> {
+		let remainder = self.0.strip_prefix(directory)?;
+		let remainder = remainder.strip_prefix('/')?;
+
+		Some(RelativePath(Cow::Owned(remainder.to_owned())))
+	}
 }
 
 impl AsRef<Path> for RelativePath<'_> {

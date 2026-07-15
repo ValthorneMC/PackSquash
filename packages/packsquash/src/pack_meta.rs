@@ -45,7 +45,8 @@ pub const PACK_FORMAT_DATA_PACK_VERSION_24W_21A: i32 = 45;
 /// - <https://minecraft.wiki/w/Data_Pack#pack.mcmeta>
 /// - Minecraft class `net.minecraft.server.packs.metadata.pack.PackMetadataSectionSerializer`
 pub struct PackMeta {
-	pack_format_version: i32
+	pack_format_version: i32,
+	overlay_directories: Vec<String>
 }
 
 /// Represents an error that may happen while parsing pack metadata files.
@@ -92,12 +93,32 @@ impl PackMeta {
 
 		file.file_read.read_to_end(&mut pack_meta_value).await?;
 
+		let mut overlay_directories = Vec::new();
+
 		// Parse the pack metadata to get its format version and do some basic validation.
 		// We do this parsing manually, instead of using auxiliary structs that derive
 		// deserialization traits, because it is faster, provides more relevant error
 		// information, and we only need to parse a few things that are unlikely to change
 		match serde_json::from_reader(StripComments::new(strip_utf8_bom(&pack_meta_value)))? {
 			Value::Object(root_object) => {
+				// Packs may declare Mojang's multi pack format "overlays" (see
+				// https://minecraft.wiki/w/Pack_format#Overlays), which place additional
+				// pack fragments (their own assets/data trees) in directories at the pack
+				// root, outside of the usual assets/data layout. Some third-party tools
+				// (e.g. resource pack generating plugins) also (ab)use this mechanism for
+				// their own generated content. Record those directories so that pack files
+				// found under them can still be recognized by their asset type, instead of
+				// being treated as opaque custom files
+				if let Some(Value::Array(overlays)) = root_object.get("overlays") {
+					overlay_directories = overlays
+						.iter()
+						.filter_map(|overlay| overlay.as_object())
+						.filter_map(|overlay| overlay.get("directory"))
+						.filter_map(|directory| directory.as_str())
+						.map(str::to_owned)
+						.collect();
+				}
+
 				match root_object.get("pack").ok_or(PackMetaError::MalformedMeta(
 					"Missing \"pack\" key in root object"
 				))? {
@@ -151,8 +172,17 @@ impl PackMeta {
 		};
 
 		Ok(Self {
-			pack_format_version
+			pack_format_version,
+			overlay_directories
 		})
+	}
+
+	/// Returns the root-level directory names declared by this pack's `pack.mcmeta`
+	/// `"overlays"` section, if any. Files under these directories are, semantically,
+	/// additional `assets`/`data` trees, even though they don't live directly under a
+	/// top-level `assets` or `data` directory themselves.
+	pub fn overlay_directories(&self) -> &[String] {
+		&self.overlay_directories
 	}
 
 	/// Returns a maybe pessimistic set of Minecraft quirks that will need to be
